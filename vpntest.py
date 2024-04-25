@@ -1,27 +1,37 @@
 import streamlit as st
 import requests
-from flask import Flask, request
+import subprocess
 import threading
+import tornado.ioloop
+import tornado.web
 
-# Flask app
-flask_app = Flask(__name__)
+# Tornado handlers
+class ConnectVPNHandler(tornado.web.RequestHandler):
+    def post(self):
+        # Logic to start OpenVPN connection
+        subprocess.run(["sudo", "openvpn", "--config", "your_vpn_config.ovpn"])
+        self.write("VPN connected")
 
-@flask_app.route('/connect-vpn', methods=['POST'])
-def connect_vpn():
-    # Logic to start OpenVPN connection
-    return "VPN connected"
+class DisconnectVPNHandler(tornado.web.RequestHandler):
+    def post(self):
+        # Logic to stop OpenVPN connection
+        subprocess.run(["sudo", "pkill", "openvpn"])
+        self.write("VPN disconnected")
 
-@flask_app.route('/disconnect-vpn', methods=['POST'])
-def disconnect_vpn():
-    # Logic to stop OpenVPN connection
-    return "VPN disconnected"
+def make_app():
+    return tornado.web.Application([
+        (r"/connect-vpn", ConnectVPNHandler),
+        (r"/disconnect-vpn", DisconnectVPNHandler),
+    ])
 
-def run_flask():
-    flask_app.run(debug=False)
+# Start Tornado server in a separate thread
+def run_tornado():
+    app = make_app()
+    app.listen(8888)
+    tornado.ioloop.IOLoop.current().start()
 
-# Start Flask server in a separate thread
-flask_thread = threading.Thread(target=run_flask)
-flask_thread.start()
+tornado_thread = threading.Thread(target=run_tornado)
+tornado_thread.start()
 
 # Streamlit app
 def main():
@@ -38,14 +48,14 @@ def main():
         st.subheader("Connect to VPN")
         if st.button("Connect"):
             # Call API to connect to VPN
-            response = requests.post("http://localhost:5000/connect-vpn")
+            response = requests.post("http://localhost:8888/connect-vpn")
             st.write(response.text)
 
     elif choice == "Disconnect from VPN":
         st.subheader("Disconnect from VPN")
         if st.button("Disconnect"):
             # Call API to disconnect from VPN
-            response = requests.post("http://localhost:5000/disconnect-vpn")
+            response = requests.post("http://localhost:8888/disconnect-vpn")
             st.write(response.text)
 
 if __name__ == '__main__':
